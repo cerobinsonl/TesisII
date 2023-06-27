@@ -1,12 +1,12 @@
 import time
 import numpy as np
-import tensorflow as tf
+import tflite_runtime.interpreter as tflite
 import argparse
 import pickle
 
 def evaluate_model_tf(model_path, x_test, y_test):
     # Load the TFLite model and allocate tensors.
-    interpreter = tf.lite.Interpreter(model_path=model_path)
+    interpreter = tflite.Interpreter(model_path=model_path)
     interpreter.allocate_tensors()
 
     input_index = interpreter.get_input_details()[0]["index"]
