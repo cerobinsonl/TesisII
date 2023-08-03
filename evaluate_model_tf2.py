@@ -1,12 +1,13 @@
 import time
 import numpy as np
-import tflite_runtime.interpreter as tflite
+import tensorflow as tf
+from sklearn.metrics import confusion_matrix, precision_score, f1_score, recall_score
 import argparse
 import pickle
 
 def evaluate_model_tf(model_path, x_test, y_test):
     # Load the TFLite model and allocate tensors.
-    interpreter = tflite.Interpreter(model_path=model_path)
+    interpreter = tf.lite.Interpreter(model_path=model_path)
     interpreter.allocate_tensors()
 
     input_index = interpreter.get_input_details()[0]["index"]
@@ -16,35 +17,31 @@ def evaluate_model_tf(model_path, x_test, y_test):
     prediction_digits = []
     inference_time = []
     for test_sample in x_test:
-        # Pre-processing: add batch dimension and convert to float32 to match with
-        # the model's input data format.
         test_sample = np.expand_dims(test_sample, axis=0).astype(np.float32)
         interpreter.set_tensor(input_index, test_sample)
 
-        # Run inference and time it.
         start_time = time.time()
         interpreter.invoke()
         end_time = time.time()
 
         inference_time.append(end_time - start_time)
 
-        # Post-processing: remove batch dimension and find the digit with highest
-        # probability.
         output = interpreter.tensor(output_index)
         digit = np.argmax(output()[0])
         prediction_digits.append(digit)
+    
+    # Convert to numpy arrays
+    y_test_np = np.array(y_test)
+    prediction_digits_np = np.array(prediction_digits)
 
-    # Compare prediction results with ground truth labels to calculate accuracy.
-    accurate_count = 0
-    for index in range(len(prediction_digits)):
-        if prediction_digits[index] == y_test[index]:
-            accurate_count += 1
-    accuracy = accurate_count * 1.0 / len(prediction_digits)
-
-    # Calculate average inference time
+    # Compute precision, confusion matrix, F1-score, and recall
+    precision = precision_score(y_test_np, prediction_digits_np, average="weighted")
     avg_inference_time = np.mean(inference_time)
+    conf_mat = confusion_matrix(y_test_np, prediction_digits_np)
+    f1 = f1_score(y_test_np, prediction_digits_np, average='weighted')
+    recall = recall_score(y_test_np, prediction_digits_np, average='weighted')
 
-    return accuracy, avg_inference_time
+    return precision, avg_inference_time, conf_mat, f1, recall
 
 def load_data(x_path, y_path):
     with open(x_path, 'rb') as f:
@@ -61,7 +58,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     x_test, y_test = load_data(args.x_test_path, args.y_test_path)
-    accuracy, avg_inference_time = evaluate_model_tf(args.model_path, x_test, y_test)
+    precision, avg_inference_time, conf_mat, f1, recall = evaluate_model_tf(args.model_path, x_test, y_test)
 
-    print(f"Model accuracy: {accuracy}")
+    print(f"Model precision: {precision}")
     print(f"Average inference time: {avg_inference_time}")
+    print(f"Confusion Matrix: \n{conf_mat}")
+    print(f"F1 Score: {f1}")
+    print(f"Recall: {recall}")
